@@ -80,32 +80,34 @@ export default function Contact() {
       </section>
 
       <section className="border-t border-gold/15 px-4 pb-16 sm:px-6 sm:pb-20 lg:px-8">
-        <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-2 lg:gap-14">
-          <div>
+        <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-2 lg:items-stretch lg:gap-14">
+          <div className="flex h-full flex-col">
             <h2 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
               Find us
             </h2>
             <p className="mt-2 text-sm text-white/55">
               Visit the shop in Brampton — tap the address above for directions.
             </p>
-            <div className="mt-6 overflow-hidden rounded-2xl border-2 border-gold/30 shadow-[0_0_32px_rgba(212,175,55,0.12)]">
-              <iframe
-                title={`Map showing ${address.full}`}
-                src={address.embedSrc}
-                className="aspect-[4/3] w-full sm:aspect-video"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                allowFullScreen
-              />
+            <div className="mt-6 flex min-h-[22rem] flex-1 flex-col">
+              <div className="relative min-h-[22rem] flex-1 overflow-hidden rounded-2xl border-2 border-gold/30 bg-black shadow-[0_0_32px_rgba(212,175,55,0.12)]">
+                <iframe
+                  title={`Map showing ${address.full}`}
+                  src={address.embedSrc}
+                  className="contact-map-frame absolute inset-0 h-full w-full border-0"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  allowFullScreen
+                />
+              </div>
+              <Link
+                href={address.mapsHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex shrink-0 items-center gap-2 text-sm font-medium text-gold transition-colors hover:text-gold-light"
+              >
+                Open in Google Maps →
+              </Link>
             </div>
-            <Link
-              href={address.mapsHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-gold transition-colors hover:text-gold-light"
-            >
-              Open in Google Maps →
-            </Link>
           </div>
 
           <ContactForm />

@@ -53,7 +53,10 @@ export const contactContent = {
       },
     },
     submit: "Send message",
+    submitting: "Sending...",
     success:
-      "Thank you! Your message has been prepared. Email delivery will be connected soon.",
+      "Thank you! Your message has been sent successfully. We'll get back to you soon.",
+    error:
+      "We couldn't send your message right now. Please try again or contact us directly by phone or email.",
   },
 };

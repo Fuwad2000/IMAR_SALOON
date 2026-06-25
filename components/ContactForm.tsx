@@ -1,17 +1,15 @@
 "use client";
 
 import { contactContent } from "@/app/Content/ContactContent";
+import {
+  validateContactForm,
+  type ContactFormPayload,
+} from "@/lib/validation/contactForm";
 import { FormEvent, useState } from "react";
 
 const { form } = contactContent;
 
-type FormValues = {
-  name: string;
-  phone: string;
-  email: string;
-  message: string;
-};
-
+type FormValues = ContactFormPayload;
 type FormErrors = Partial<Record<keyof FormValues, string>>;
 
 const initialValues: FormValues = {
@@ -20,48 +18,6 @@ const initialValues: FormValues = {
   email: "",
   message: "",
 };
-
-const namePattern = /^[a-zA-ZÀ-ÿ' -]{2,80}$/;
-const phonePattern = /^[+]?[\d\s().-]{10,20}$/;
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
-function validate(values: FormValues): FormErrors {
-  const errors: FormErrors = {};
-
-  const trimmedName = values.name.trim();
-  if (!trimmedName) {
-    errors.name = "Name is required.";
-  } else if (!namePattern.test(trimmedName)) {
-    errors.name = "Enter a valid name (2–80 characters, letters only).";
-  }
-
-  const trimmedPhone = values.phone.trim();
-  if (!trimmedPhone) {
-    errors.phone = "Phone number is required.";
-  } else if (!phonePattern.test(trimmedPhone)) {
-    errors.phone = "Enter a valid phone number (10–15 digits).";
-  } else if (trimmedPhone.replace(/\D/g, "").length < 10) {
-    errors.phone = "Phone number must include at least 10 digits.";
-  }
-
-  const trimmedEmail = values.email.trim();
-  if (!trimmedEmail) {
-    errors.email = "Email is required.";
-  } else if (!emailPattern.test(trimmedEmail)) {
-    errors.email = "Enter a valid email address.";
-  }
-
-  const trimmedMessage = values.message.trim();
-  if (!trimmedMessage) {
-    errors.message = "Message is required.";
-  } else if (trimmedMessage.length < 10) {
-    errors.message = "Message must be at least 10 characters.";
-  } else if (trimmedMessage.length > 1000) {
-    errors.message = "Message must be 1000 characters or fewer.";
-  }
-
-  return errors;
-}
 
 const inputClassName =
   "w-full rounded-xl border border-gold/20 bg-black/40 px-4 py-3 text-sm text-white placeholder:text-white/30 transition-all duration-300 focus:border-gold/60 focus:outline-none focus:ring-2 focus:ring-gold/20";
@@ -75,38 +31,68 @@ export default function ContactForm() {
   const [touched, setTouched] = useState<Partial<Record<keyof FormValues, boolean>>>({});
   const [submitted, setSubmitted] = useState(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleBlur = (field: keyof FormValues) => {
     setTouched((prev) => ({ ...prev, [field]: true }));
-    setErrors(validate(values));
+    setErrors(validateContactForm(values));
   };
 
   const handleChange = (field: keyof FormValues, value: string) => {
     const next = { ...values, [field]: value };
     setValues(next);
     if (touched[field] || submitted) {
-      setErrors(validate(next));
+      setErrors(validateContactForm(next));
     }
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitted(true);
+    setSubmitError("");
     setTouched({ name: true, phone: true, email: true, message: true });
 
-    const nextErrors = validate(values);
+    const nextErrors = validateContactForm(values);
     setErrors(nextErrors);
 
-    if (Object.keys(nextErrors).length === 0) {
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+
+      const data = (await response.json()) as {
+        error?: string;
+        errors?: FormErrors;
+      };
+
+      if (!response.ok) {
+        if (data.errors) {
+          setErrors(data.errors);
+        }
+        setSubmitError(data.error ?? form.error);
+        return;
+      }
+
       setShowSuccessMessage(true);
       setValues(initialValues);
       setTouched({});
       setSubmitted(false);
       setErrors({});
+    } catch {
+      setSubmitError(form.error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
-
-  const showSuccess = showSuccessMessage;
 
   const field = (
     key: keyof FormValues,
@@ -135,6 +121,7 @@ export default function ContactForm() {
             onChange={(e) => handleChange(key, e.target.value)}
             onBlur={() => handleBlur(key)}
             placeholder={config.placeholder}
+            disabled={isSubmitting}
             aria-invalid={hasError}
             aria-describedby={hasError ? `${inputId}-error` : undefined}
             className={`${inputClassName} resize-none ${hasError ? inputErrorClassName : ""}`}
@@ -149,6 +136,7 @@ export default function ContactForm() {
             onChange={(e) => handleChange(key, e.target.value)}
             onBlur={() => handleBlur(key)}
             placeholder={config.placeholder}
+            disabled={isSubmitting}
             aria-invalid={hasError}
             aria-describedby={hasError ? `${inputId}-error` : undefined}
             className={`${inputClassName} ${hasError ? inputErrorClassName : ""}`}
@@ -164,16 +152,25 @@ export default function ContactForm() {
   };
 
   return (
-    <div className="rounded-2xl border border-gold/20 bg-white/[0.03] p-6 backdrop-blur-sm sm:p-8">
+    <div className="flex h-full flex-col rounded-2xl border border-gold/20 bg-white/[0.03] p-6 backdrop-blur-sm sm:p-8">
       <h2 className="text-2xl font-bold tracking-tight text-white">{form.title}</h2>
       <p className="mt-2 text-sm leading-relaxed text-white/55">{form.subtitle}</p>
 
-      {showSuccess && (
+      {showSuccessMessage && (
         <div
           className="mt-6 rounded-xl border border-gold/30 bg-gold/10 px-4 py-3 text-sm text-gold-light"
           role="status"
         >
           {form.success}
+        </div>
+      )}
+
+      {submitError && (
+        <div
+          className="mt-6 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-300"
+          role="alert"
+        >
+          {submitError}
         </div>
       )}
 
@@ -214,9 +211,10 @@ export default function ContactForm() {
 
         <button
           type="submit"
-          className="inline-flex w-full items-center justify-center rounded-full bg-gold px-8 py-3.5 text-sm font-bold uppercase tracking-[0.12em] text-[#0a0a0a] transition-all duration-300 hover:bg-gold-light hover:shadow-[0_0_24px_rgba(212,175,55,0.45)] sm:w-auto"
+          disabled={isSubmitting}
+          className="inline-flex w-full items-center justify-center rounded-full bg-gold px-8 py-3.5 text-sm font-bold uppercase tracking-[0.12em] text-[#0a0a0a] transition-all duration-300 hover:bg-gold-light hover:shadow-[0_0_24px_rgba(212,175,55,0.45)] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
         >
-          {form.submit}
+          {isSubmitting ? form.submitting : form.submit}
         </button>
       </form>
     </div>
