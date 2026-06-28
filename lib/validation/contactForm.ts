@@ -5,6 +5,11 @@ export type ContactFormPayload = {
   message: string;
 };
 
+export type ContactFormRequest = ContactFormPayload & {
+  turnstileToken?: string;
+  companyWebsite?: string;
+};
+
 const namePattern = /^[a-zA-ZÀ-ÿ' -]{2,80}$/;
 const phonePattern = /^[+]?[\d\s().-]{10,20}$/;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;

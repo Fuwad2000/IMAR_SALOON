@@ -58,5 +58,7 @@ export const contactContent = {
       "Thank you! Your message has been sent successfully. We'll get back to you soon.",
     error:
       "We couldn't send your message right now. Please try again or contact us directly by phone or email.",
+    turnstileRequired:
+      "Please complete the security check before sending your message.",
   },
 };

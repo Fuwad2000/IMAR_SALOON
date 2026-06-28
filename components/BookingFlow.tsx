@@ -1,0 +1,683 @@
+"use client";
+
+import { bookingsContent } from "@/app/Content/BookingsContent";
+import {
+  formatBookingDate,
+  formatBookingTime,
+  getAvailableDates,
+  getTimeSlots,
+  groupTimeSlots,
+} from "@/lib/booking/availability";
+import type { BookingDraft, BookingStepId } from "@/lib/booking/types";
+import {
+  sanitizeBookingDetails,
+  validateBookingDetails,
+  type BookingDetailsPayload,
+} from "@/lib/validation/bookingForm";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+const { steps, services, form } = bookingsContent;
+
+const stepOrder: BookingStepId[] = ["service", "datetime", "details", "review"];
+
+type CompletedSummary = {
+  serviceName: string;
+  date: string;
+  time: string;
+  name: string;
+};
+
+const initialDraft: BookingDraft = {
+  serviceId: null,
+  date: null,
+  time: null,
+  name: "",
+  phone: "",
+  email: "",
+  notes: "",
+};
+
+const inputClassName =
+  "w-full rounded-xl border border-gold/20 bg-black/40 px-4 py-3 text-sm text-white placeholder:text-white/30 transition-all duration-300 focus:border-gold/60 focus:outline-none focus:ring-2 focus:ring-gold/20";
+
+const inputErrorClassName =
+  "border-red-400/60 focus:border-red-400/60 focus:ring-red-400/20";
+
+const selectionClassName = (selected: boolean) =>
+  [
+    "rounded-xl border px-4 py-3 text-left transition-all duration-300",
+    selected
+      ? "border-gold bg-gold/10 text-white shadow-[0_0_20px_rgba(212,175,55,0.15)]"
+      : "border-gold/15 bg-black/30 text-white/80 hover:border-gold/35 hover:bg-white/[0.04]",
+  ].join(" ");
+
+function StepIndicator({ currentStep }: { currentStep: BookingStepId }) {
+  const currentIndex = stepOrder.indexOf(currentStep);
+
+  return (
+    <ol className="grid grid-cols-4 gap-2 sm:gap-3">
+      {steps.map((step, index) => {
+        const isComplete = index < currentIndex;
+        const isCurrent = step.id === currentStep;
+
+        return (
+          <li key={step.id} className="min-w-0">
+            <div
+              className={[
+                "rounded-xl border px-2 py-3 text-center transition-all duration-300 sm:px-3",
+                isCurrent
+                  ? "border-gold/50 bg-gold/10"
+                  : isComplete
+                    ? "border-gold/25 bg-white/[0.03]"
+                    : "border-gold/10 bg-black/20",
+              ].join(" ")}
+            >
+              <span
+                className={[
+                  "mx-auto flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold",
+                  isCurrent
+                    ? "bg-gold text-[#0a0a0a]"
+                    : isComplete
+                      ? "bg-gold/20 text-gold-light"
+                      : "bg-white/5 text-white/35",
+                ].join(" ")}
+              >
+                {isComplete ? "✓" : index + 1}
+              </span>
+              <p
+                className={[
+                  "mt-2 truncate text-[10px] font-semibold uppercase tracking-[0.12em] sm:text-xs",
+                  isCurrent ? "text-gold-light" : "text-white/45",
+                ].join(" ")}
+              >
+                {step.label}
+              </p>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+export default function BookingFlow() {
+  const turnstileRef = useRef<TurnstileInstance | null>(null);
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState<string | null>(null);
+  const [turnstileConfigLoading, setTurnstileConfigLoading] = useState(true);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [companyWebsite, setCompanyWebsite] = useState("");
+  const [currentStep, setCurrentStep] = useState<BookingStepId>("service");
+  const [draft, setDraft] = useState<BookingDraft>(initialDraft);
+  const [completedSummary, setCompletedSummary] = useState<CompletedSummary | null>(
+    null,
+  );
+  const [detailsErrors, setDetailsErrors] = useState<
+    Partial<Record<keyof BookingDetailsPayload, string>>
+  >({});
+  const [detailsTouched, setDetailsTouched] = useState<
+    Partial<Record<keyof BookingDetailsPayload, boolean>>
+  >({});
+  const [detailsSubmitted, setDetailsSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isComplete, setIsComplete] = useState(false);
+
+  const availableDates = useMemo(() => getAvailableDates(), []);
+  const timeSlots = useMemo(() => getTimeSlots(), []);
+  const groupedSlots = useMemo(() => groupTimeSlots(timeSlots), [timeSlots]);
+
+  const selectedService = services.find((service) => service.id === draft.serviceId);
+
+  const resetTurnstile = () => {
+    setTurnstileToken("");
+    turnstileRef.current?.reset();
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTurnstileConfig() {
+      try {
+        const response = await fetch("/api/turnstile/site-key");
+        const data = (await response.json()) as { siteKey?: string | null };
+
+        if (!cancelled) {
+          setTurnstileSiteKey(data.siteKey ?? null);
+        }
+      } catch {
+        if (!cancelled) {
+          setTurnstileSiteKey(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setTurnstileConfigLoading(false);
+        }
+      }
+    }
+
+    loadTurnstileConfig();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const updateDraft = (patch: Partial<BookingDraft>) => {
+    setDraft((prev) => ({ ...prev, ...patch }));
+  };
+
+  const goToStep = (step: BookingStepId) => {
+    setSubmitError("");
+    setCurrentStep(step);
+  };
+
+  const goBack = () => {
+    const index = stepOrder.indexOf(currentStep);
+    if (index > 0) {
+      if (currentStep === "review") {
+        resetTurnstile();
+      }
+      goToStep(stepOrder[index - 1]);
+    }
+  };
+
+  const goNext = () => {
+    const index = stepOrder.indexOf(currentStep);
+    if (index < stepOrder.length - 1) {
+      goToStep(stepOrder[index + 1]);
+    }
+  };
+
+  const handleContinue = () => {
+    setSubmitError("");
+
+    if (currentStep === "service" && !draft.serviceId) {
+      return;
+    }
+
+    if (currentStep === "datetime" && (!draft.date || !draft.time)) {
+      return;
+    }
+
+    if (currentStep === "details") {
+      setDetailsSubmitted(true);
+      setDetailsTouched({ name: true, phone: true, email: true, notes: true });
+      const nextErrors = validateBookingDetails(draft);
+      setDetailsErrors(nextErrors);
+      if (Object.keys(nextErrors).length > 0) {
+        return;
+      }
+    }
+
+    goNext();
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedService || !draft.serviceId || !draft.date || !draft.time) {
+      return;
+    }
+
+    if (!turnstileToken) {
+      setSubmitError(form.turnstileRequired);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError("");
+
+    try {
+      const response = await fetch("/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...sanitizeBookingDetails(draft),
+          serviceId: draft.serviceId,
+          date: draft.date,
+          time: draft.time,
+          turnstileToken,
+          companyWebsite,
+        }),
+      });
+
+      const data = (await response.json()) as {
+        error?: string;
+        errors?: Partial<Record<keyof BookingDetailsPayload, string>>;
+      };
+
+      if (!response.ok) {
+        if (data.errors) {
+          setDetailsErrors(data.errors);
+        }
+        setSubmitError(data.error ?? form.error);
+        resetTurnstile();
+        if (response.status === 409) {
+          setCurrentStep("datetime");
+        }
+        return;
+      }
+
+      setCompletedSummary({
+        serviceName: selectedService.name,
+        date: draft.date,
+        time: draft.time,
+        name: draft.name,
+      });
+      setDraft(initialDraft);
+      setDetailsErrors({});
+      setDetailsTouched({});
+      setDetailsSubmitted(false);
+      resetTurnstile();
+      setIsComplete(true);
+    } catch {
+      setSubmitError(form.error);
+      resetTurnstile();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const resetBooking = () => {
+    setDraft(initialDraft);
+    setCompletedSummary(null);
+    setDetailsErrors({});
+    setDetailsTouched({});
+    setDetailsSubmitted(false);
+    setSubmitError("");
+    setIsComplete(false);
+    setCurrentStep("service");
+    resetTurnstile();
+  };
+
+  const canContinue =
+    (currentStep === "service" && Boolean(draft.serviceId)) ||
+    (currentStep === "datetime" && Boolean(draft.date && draft.time)) ||
+    currentStep === "details" ||
+    currentStep === "review";
+
+  const renderTimeGroup = (
+    label: string,
+    slots: string[],
+  ) => {
+    if (slots.length === 0) {
+      return null;
+    }
+
+    return (
+      <div>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-gold-light">
+          {label}
+        </p>
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {slots.map((slot) => (
+            <button
+              key={slot}
+              type="button"
+              onClick={() => updateDraft({ time: slot })}
+              className={[
+                "rounded-lg border px-2 py-2.5 text-sm font-medium transition-all duration-300",
+                draft.time === slot
+                  ? "border-gold bg-gold text-[#0a0a0a] shadow-[0_0_16px_rgba(212,175,55,0.35)]"
+                  : "border-gold/15 bg-black/30 text-white/75 hover:border-gold/35 hover:text-white",
+              ].join(" ")}
+            >
+              {formatBookingTime(slot)}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderDetailsField = (
+    key: keyof BookingDetailsPayload,
+    type: "text" | "tel" | "email" | "textarea",
+    config: { label: string; placeholder: string; required?: boolean; maxLength?: number },
+  ) => {
+    const hasError = Boolean(
+      detailsErrors[key] && (detailsTouched[key] || detailsSubmitted),
+    );
+
+    return (
+      <div>
+        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-gold-light">
+          {config.label}
+          {config.required && <span className="text-gold"> *</span>}
+        </label>
+        {type === "textarea" ? (
+          <textarea
+            rows={4}
+            maxLength={config.maxLength}
+            value={draft[key]}
+            onChange={(event) => {
+              updateDraft({ [key]: event.target.value });
+              if (detailsTouched[key] || detailsSubmitted) {
+                setDetailsErrors(validateBookingDetails({ ...draft, [key]: event.target.value }));
+              }
+            }}
+            onBlur={() => {
+              setDetailsTouched((prev) => ({ ...prev, [key]: true }));
+              setDetailsErrors(validateBookingDetails(draft));
+            }}
+            placeholder={config.placeholder}
+            className={`${inputClassName} resize-none ${hasError ? inputErrorClassName : ""}`}
+          />
+        ) : (
+          <input
+            type={type}
+            maxLength={config.maxLength}
+            value={draft[key]}
+            onChange={(event) => {
+              updateDraft({ [key]: event.target.value });
+              if (detailsTouched[key] || detailsSubmitted) {
+                setDetailsErrors(validateBookingDetails({ ...draft, [key]: event.target.value }));
+              }
+            }}
+            onBlur={() => {
+              setDetailsTouched((prev) => ({ ...prev, [key]: true }));
+              setDetailsErrors(validateBookingDetails(draft));
+            }}
+            placeholder={config.placeholder}
+            className={`${inputClassName} ${hasError ? inputErrorClassName : ""}`}
+          />
+        )}
+        {hasError && (
+          <p className="mt-2 text-xs text-red-400/90" role="alert">
+            {detailsErrors[key]}
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  if (isComplete && completedSummary) {
+    return (
+      <div className="rounded-2xl border border-gold/20 bg-white/[0.03] p-8 text-center backdrop-blur-sm sm:p-10">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-gold/30 bg-gold/10 text-2xl text-gold">
+          ✓
+        </div>
+        <h2 className="mt-6 text-2xl font-bold tracking-tight text-white">
+          {form.success.title}
+        </h2>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-white/60">
+          {form.success.message}
+        </p>
+
+        <div className="mx-auto mt-8 max-w-md rounded-xl border border-gold/15 bg-black/30 p-5 text-left text-sm">
+          <p className="font-semibold text-white">{completedSummary.serviceName}</p>
+          <p className="mt-2 text-white/55">
+            {formatBookingDate(completedSummary.date)} at{" "}
+            {formatBookingTime(completedSummary.time)}
+          </p>
+          <p className="mt-1 text-white/40">{completedSummary.name}</p>
+        </div>
+
+        <button
+          type="button"
+          onClick={resetBooking}
+          className="mt-8 inline-flex items-center justify-center rounded-full bg-gold px-8 py-3.5 text-sm font-bold uppercase tracking-[0.12em] text-[#0a0a0a] transition-all duration-300 hover:bg-gold-light hover:shadow-[0_0_24px_rgba(212,175,55,0.45)]"
+        >
+          {form.success.newBooking}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-gold/20 bg-white/[0.03] p-6 backdrop-blur-sm sm:p-8">
+      <StepIndicator currentStep={currentStep} />
+
+      <div className="mt-8">
+        {currentStep === "service" && (
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-white">
+              {form.service.title}
+            </h2>
+            <p className="mt-2 text-sm text-white/55">{form.service.subtitle}</p>
+
+            <div className="mt-6 grid gap-3">
+              {services.map((service) => (
+                <button
+                  key={service.id}
+                  type="button"
+                  onClick={() => updateDraft({ serviceId: service.id })}
+                  className={selectionClassName(draft.serviceId === service.id)}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-semibold text-white">{service.name}</p>
+                      <p className="mt-1 text-sm text-white/50">{service.description}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full border border-gold/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-gold-light">
+                      {service.durationMinutes} min
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {currentStep === "datetime" && (
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-white">
+              {form.datetime.title}
+            </h2>
+            <p className="mt-2 text-sm text-white/55">{form.datetime.subtitle}</p>
+
+            <div className="mt-8">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-gold-light">
+                {form.datetime.dateLabel}
+              </p>
+              <div className="flex gap-2 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {availableDates.map((date) => (
+                  <button
+                    key={date.key}
+                    type="button"
+                    onClick={() => updateDraft({ date: date.key, time: null })}
+                    className={[
+                      "min-w-[4.75rem] shrink-0 rounded-xl border px-3 py-3 text-center transition-all duration-300",
+                      draft.date === date.key
+                        ? "border-gold bg-gold text-[#0a0a0a]"
+                        : "border-gold/15 bg-black/30 text-white/75 hover:border-gold/35",
+                    ].join(" ")}
+                  >
+                    <span className="block text-[10px] font-semibold uppercase tracking-[0.14em]">
+                      {date.weekday}
+                    </span>
+                    <span className="mt-1 block text-sm font-bold">{date.monthDay}</span>
+                    {date.isToday && (
+                      <span
+                        className={[
+                          "mt-1 block text-[10px] uppercase tracking-[0.12em]",
+                          draft.date === date.key ? "text-[#0a0a0a]/70" : "text-gold/70",
+                        ].join(" ")}
+                      >
+                        Today
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-8 space-y-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-light">
+                {form.datetime.timeLabel}
+              </p>
+
+              {!draft.date ? (
+                <p className="rounded-xl border border-gold/10 bg-black/20 px-4 py-6 text-center text-sm text-white/45">
+                  Select a date first to see available times.
+                </p>
+              ) : (
+                <>
+                  {renderTimeGroup(form.datetime.morning, groupedSlots.morning)}
+                  {renderTimeGroup(form.datetime.afternoon, groupedSlots.afternoon)}
+                  {renderTimeGroup(form.datetime.evening, groupedSlots.evening)}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {currentStep === "details" && (
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-white">
+              {form.details.title}
+            </h2>
+            <p className="mt-2 text-sm text-white/55">{form.details.subtitle}</p>
+
+            <div className="mt-8 space-y-6">
+              <div className="grid gap-6 sm:grid-cols-2">
+                {renderDetailsField("name", "text", {
+                  label: form.details.fields.name.label,
+                  placeholder: form.details.fields.name.placeholder,
+                  required: true,
+                  maxLength: 80,
+                })}
+                {renderDetailsField("phone", "tel", {
+                  label: form.details.fields.phone.label,
+                  placeholder: form.details.fields.phone.placeholder,
+                  required: true,
+                  maxLength: 20,
+                })}
+              </div>
+
+              {renderDetailsField("email", "email", {
+                label: form.details.fields.email.label,
+                placeholder: form.details.fields.email.placeholder,
+                required: true,
+                maxLength: 254,
+              })}
+
+              {renderDetailsField("notes", "textarea", {
+                label: form.details.fields.notes.label,
+                placeholder: form.details.fields.notes.placeholder,
+                maxLength: 500,
+              })}
+            </div>
+          </div>
+        )}
+
+        {currentStep === "review" && selectedService && draft.date && draft.time && (
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-white">
+              {form.review.title}
+            </h2>
+            <p className="mt-2 text-sm text-white/55">{form.review.subtitle}</p>
+
+            <dl className="mt-8 space-y-4 rounded-xl border border-gold/15 bg-black/30 p-5">
+              {[
+                [form.review.labels.service, selectedService.name],
+                [form.review.labels.duration, `${selectedService.durationMinutes} minutes`],
+                [form.review.labels.date, formatBookingDate(draft.date)],
+                [form.review.labels.time, formatBookingTime(draft.time)],
+                [form.review.labels.name, draft.name],
+                [form.review.labels.phone, draft.phone],
+                [form.review.labels.email, draft.email],
+                ...(draft.notes
+                  ? [[form.review.labels.notes, draft.notes] as const]
+                  : []),
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="flex flex-col gap-1 border-b border-gold/10 pb-4 last:border-b-0 last:pb-0 sm:flex-row sm:justify-between"
+                >
+                  <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-light">
+                    {label}
+                  </dt>
+                  <dd className="text-sm text-white/80 sm:text-right">{value}</dd>
+                </div>
+              ))}
+            </dl>
+
+            <p className="mt-4 text-xs text-white/40">
+              Submit your request and Imar will confirm your appointment shortly.
+            </p>
+
+            <div
+              className="absolute left-[-9999px] h-px w-px overflow-hidden"
+              aria-hidden="true"
+            >
+              <label htmlFor="booking-companyWebsite">Company website</label>
+              <input
+                id="booking-companyWebsite"
+                name="companyWebsite"
+                type="text"
+                value={companyWebsite}
+                onChange={(event) => setCompanyWebsite(event.target.value)}
+                tabIndex={-1}
+                autoComplete="off"
+              />
+            </div>
+
+            {turnstileConfigLoading ? (
+              <div className="mt-6 rounded-xl border border-gold/15 bg-black/30 px-4 py-6 text-center text-sm text-white/50">
+                Loading security verification...
+              </div>
+            ) : turnstileSiteKey ? (
+              <div className="mt-6 overflow-hidden rounded-xl border border-gold/15 bg-black/30 p-3">
+                <Turnstile
+                  ref={turnstileRef}
+                  siteKey={turnstileSiteKey}
+                  onSuccess={setTurnstileToken}
+                  onExpire={resetTurnstile}
+                  onError={resetTurnstile}
+                  options={{
+                    theme: "dark",
+                    appearance: "always",
+                  }}
+                />
+              </div>
+            ) : (
+              <p className="mt-6 text-sm text-red-300" role="alert">
+                Security verification is not configured. Please try again later.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {submitError && (
+        <div
+          className="mt-6 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-300"
+          role="alert"
+        >
+          {submitError}
+        </div>
+      )}
+
+      <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+        <button
+          type="button"
+          onClick={goBack}
+          disabled={currentStep === "service" || isSubmitting}
+          className="inline-flex items-center justify-center rounded-full border border-gold/25 px-8 py-3.5 text-sm font-bold uppercase tracking-[0.12em] text-gold transition-all duration-300 hover:border-gold/50 hover:bg-gold/5 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {form.actions.back}
+        </button>
+
+        {currentStep === "review" ? (
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isSubmitting || !turnstileToken || !turnstileSiteKey}
+            className="inline-flex items-center justify-center rounded-full bg-gold px-8 py-3.5 text-sm font-bold uppercase tracking-[0.12em] text-[#0a0a0a] transition-all duration-300 hover:bg-gold-light hover:shadow-[0_0_24px_rgba(212,175,55,0.45)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSubmitting ? form.actions.submitting : form.actions.confirm}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleContinue}
+            disabled={!canContinue}
+            className="inline-flex items-center justify-center rounded-full bg-gold px-8 py-3.5 text-sm font-bold uppercase tracking-[0.12em] text-[#0a0a0a] transition-all duration-300 hover:bg-gold-light hover:shadow-[0_0_24px_rgba(212,175,55,0.45)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {form.actions.continue}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}

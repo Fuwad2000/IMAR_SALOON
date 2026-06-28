@@ -5,7 +5,8 @@ import {
   validateContactForm,
   type ContactFormPayload,
 } from "@/lib/validation/contactForm";
-import { FormEvent, useState } from "react";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 const { form } = contactContent;
 
@@ -26,13 +27,52 @@ const inputErrorClassName =
   "border-red-400/60 focus:border-red-400/60 focus:ring-red-400/20";
 
 export default function ContactForm() {
+  const turnstileRef = useRef<TurnstileInstance | null>(null);
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState<string | null>(null);
+  const [turnstileConfigLoading, setTurnstileConfigLoading] = useState(true);
   const [values, setValues] = useState<FormValues>(initialValues);
+  const [companyWebsite, setCompanyWebsite] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Partial<Record<keyof FormValues, boolean>>>({});
   const [submitted, setSubmitted] = useState(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const resetTurnstile = () => {
+    setTurnstileToken("");
+    turnstileRef.current?.reset();
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTurnstileConfig() {
+      try {
+        const response = await fetch("/api/turnstile/site-key");
+        const data = (await response.json()) as { siteKey?: string | null };
+
+        if (!cancelled) {
+          setTurnstileSiteKey(data.siteKey ?? null);
+        }
+      } catch {
+        if (!cancelled) {
+          setTurnstileSiteKey(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setTurnstileConfigLoading(false);
+        }
+      }
+    }
+
+    loadTurnstileConfig();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleBlur = (field: keyof FormValues) => {
     setTouched((prev) => ({ ...prev, [field]: true }));
@@ -60,13 +100,22 @@ export default function ContactForm() {
       return;
     }
 
+    if (!turnstileToken) {
+      setSubmitError(form.turnstileRequired);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
       const response = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify({
+          ...values,
+          turnstileToken,
+          companyWebsite,
+        }),
       });
 
       const data = (await response.json()) as {
@@ -79,16 +128,20 @@ export default function ContactForm() {
           setErrors(data.errors);
         }
         setSubmitError(data.error ?? form.error);
+        resetTurnstile();
         return;
       }
 
       setShowSuccessMessage(true);
       setValues(initialValues);
+      setCompanyWebsite("");
       setTouched({});
       setSubmitted(false);
       setErrors({});
+      resetTurnstile();
     } catch {
       setSubmitError(form.error);
+      resetTurnstile();
     } finally {
       setIsSubmitting(false);
     }
@@ -151,6 +204,8 @@ export default function ContactForm() {
     );
   };
 
+  const canSubmit = Boolean(turnstileSiteKey && turnstileToken) && !isSubmitting;
+
   return (
     <div className="flex h-full flex-col rounded-2xl border border-gold/20 bg-white/[0.03] p-6 backdrop-blur-sm sm:p-8">
       <h2 className="text-2xl font-bold tracking-tight text-white">{form.title}</h2>
@@ -179,6 +234,22 @@ export default function ContactForm() {
         onSubmit={handleSubmit}
         noValidate
       >
+        <div
+          className="absolute left-[-9999px] h-px w-px overflow-hidden"
+          aria-hidden="true"
+        >
+          <label htmlFor="contact-companyWebsite">Company website</label>
+          <input
+            id="contact-companyWebsite"
+            name="companyWebsite"
+            type="text"
+            value={companyWebsite}
+            onChange={(event) => setCompanyWebsite(event.target.value)}
+            tabIndex={-1}
+            autoComplete="off"
+          />
+        </div>
+
         <div className="grid gap-6 sm:grid-cols-2">
           {field("name", "text", {
             label: form.fields.name.label,
@@ -205,13 +276,37 @@ export default function ContactForm() {
           rows: 5,
         })}
 
+        {turnstileConfigLoading ? (
+          <div className="rounded-xl border border-gold/15 bg-black/30 px-4 py-6 text-center text-sm text-white/50">
+            Loading security verification...
+          </div>
+        ) : turnstileSiteKey ? (
+          <div className="overflow-hidden rounded-xl border border-gold/15 bg-black/30 p-3">
+            <Turnstile
+              ref={turnstileRef}
+              siteKey={turnstileSiteKey}
+              onSuccess={setTurnstileToken}
+              onExpire={resetTurnstile}
+              onError={resetTurnstile}
+              options={{
+                theme: "dark",
+                appearance: "always",
+              }}
+            />
+          </div>
+        ) : (
+          <p className="text-sm text-red-300" role="alert">
+            Security verification is not configured. Please try again later.
+          </p>
+        )}
+
         <p className="text-xs text-white/35">
           Fields marked with <span className="text-gold">*</span> are required.
         </p>
 
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={!canSubmit}
           className="inline-flex w-full items-center justify-center rounded-full bg-gold px-8 py-3.5 text-sm font-bold uppercase tracking-[0.12em] text-[#0a0a0a] transition-all duration-300 hover:bg-gold-light hover:shadow-[0_0_24px_rgba(212,175,55,0.45)] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
         >
           {isSubmitting ? form.submitting : form.submit}

@@ -3,10 +3,11 @@ import {
   buildContactEmailSubject,
   buildContactEmailText,
 } from "@/lib/email/buildContactEmail";
+import { verifyTurnstileToken } from "@/lib/turnstile/verifyTurnstile";
 import {
   sanitizeContactForm,
   validateContactForm,
-  type ContactFormPayload,
+  type ContactFormRequest,
 } from "@/lib/validation/contactForm";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
@@ -25,20 +26,53 @@ function getSiteUrl(request: Request): string {
   return "http://localhost:3000";
 }
 
+function getClientIp(request: Request): string | null {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    return forwarded.split(",")[0]?.trim() ?? null;
+  }
+
+  return request.headers.get("x-real-ip");
+}
+
 export async function POST(request: Request) {
   try {
+    const body = (await request.json()) as ContactFormRequest;
+
+    if (body.companyWebsite?.trim()) {
+      return NextResponse.json({ success: true });
+    }
+
+    const errors = validateContactForm(body);
+
+    if (Object.keys(errors).length > 0) {
+      return NextResponse.json({ errors }, { status: 400 });
+    }
+
+    if (!body.turnstileToken?.trim()) {
+      return NextResponse.json(
+        { error: "Security verification is required. Please try again." },
+        { status: 400 },
+      );
+    }
+
+    const turnstileValid = await verifyTurnstileToken(
+      body.turnstileToken.trim(),
+      getClientIp(request),
+    );
+
+    if (!turnstileValid) {
+      return NextResponse.json(
+        { error: "Security verification failed. Please refresh and try again." },
+        { status: 400 },
+      );
+    }
+
     if (!process.env.RESEND_API_KEY) {
       return NextResponse.json(
         { error: "Email service is not configured yet." },
         { status: 503 },
       );
-    }
-
-    const body = (await request.json()) as ContactFormPayload;
-    const errors = validateContactForm(body);
-
-    if (Object.keys(errors).length > 0) {
-      return NextResponse.json({ errors }, { status: 400 });
     }
 
     const payload = sanitizeContactForm(body);
