@@ -73,6 +73,8 @@ export const bookingsContent = {
       morning: "Morning",
       afternoon: "Afternoon",
       evening: "Evening",
+      loadingTimes: "Checking availability...",
+      unavailable: "Unavailable",
     },
     details: {
       title: "Your details",

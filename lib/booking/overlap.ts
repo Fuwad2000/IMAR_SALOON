@@ -26,6 +26,16 @@ export function hasBookingOverlap(
   });
 }
 
+export function getUnavailableTimeSlots(
+  slots: string[],
+  durationMinutes: number,
+  existingBookings: ExistingBookingSlot[],
+): string[] {
+  return slots.filter((slot) =>
+    hasBookingOverlap(timeToMinutes(slot), durationMinutes, existingBookings),
+  );
+}
+
 export function toDatabaseTime(time: string): string {
   const normalized = normalizeTime(time);
   return `${normalized}:00`;

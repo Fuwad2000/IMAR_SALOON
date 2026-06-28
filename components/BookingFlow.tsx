@@ -39,7 +39,7 @@ const initialDraft: BookingDraft = {
 };
 
 const inputClassName =
-  "w-full rounded-xl border border-gold/20 bg-black/40 px-4 py-3 text-sm text-white placeholder:text-white/30 transition-all duration-300 focus:border-gold/60 focus:outline-none focus:ring-2 focus:ring-gold/20";
+  "w-full rounded-xl border border-gold/20 bg-black/40 px-4 py-3 text-base text-white placeholder:text-white/30 transition-all duration-300 focus:border-gold/60 focus:outline-none focus:ring-2 focus:ring-gold/20 sm:text-sm";
 
 const inputErrorClassName =
   "border-red-400/60 focus:border-red-400/60 focus:ring-red-400/20";
@@ -102,6 +102,8 @@ function StepIndicator({ currentStep }: { currentStep: BookingStepId }) {
 }
 
 export default function BookingFlow() {
+  const flowTopRef = useRef<HTMLDivElement>(null);
+  const skipInitialScrollRef = useRef(true);
   const turnstileRef = useRef<TurnstileInstance | null>(null);
   const [turnstileSiteKey, setTurnstileSiteKey] = useState<string | null>(null);
   const [turnstileConfigLoading, setTurnstileConfigLoading] = useState(true);
@@ -122,6 +124,8 @@ export default function BookingFlow() {
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const [unavailableSlots, setUnavailableSlots] = useState<string[]>([]);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
 
   const availableDates = useMemo(() => getAvailableDates(), []);
   const timeSlots = useMemo(() => getTimeSlots(), []);
@@ -163,12 +167,77 @@ export default function BookingFlow() {
     };
   }, []);
 
+  useEffect(() => {
+    if (skipInitialScrollRef.current) {
+      skipInitialScrollRef.current = false;
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      flowTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [currentStep, isComplete]);
+
+  useEffect(() => {
+    if (!draft.date || !selectedService) {
+      setUnavailableSlots([]);
+      setAvailabilityLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadAvailability() {
+      setAvailabilityLoading(true);
+
+      try {
+        const params = new URLSearchParams({
+          date: draft.date!,
+          durationMinutes: String(selectedService!.durationMinutes),
+        });
+        const response = await fetch(`/api/bookings/availability?${params}`);
+        const data = (await response.json()) as { unavailableSlots?: string[] };
+
+        if (cancelled) {
+          return;
+        }
+
+        const nextUnavailable = data.unavailableSlots ?? [];
+        setUnavailableSlots(nextUnavailable);
+
+        setDraft((prev) => {
+          if (prev.time && nextUnavailable.includes(prev.time)) {
+            return { ...prev, time: null };
+          }
+          return prev;
+        });
+      } catch {
+        if (!cancelled) {
+          setUnavailableSlots([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setAvailabilityLoading(false);
+        }
+      }
+    }
+
+    loadAvailability();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draft.date, selectedService?.id, selectedService?.durationMinutes]);
+
   const updateDraft = (patch: Partial<BookingDraft>) => {
     setDraft((prev) => ({ ...prev, ...patch }));
   };
 
   const goToStep = (step: BookingStepId) => {
     setSubmitError("");
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     setCurrentStep(step);
   };
 
@@ -286,6 +355,8 @@ export default function BookingFlow() {
     setSubmitError("");
     setIsComplete(false);
     setCurrentStep("service");
+    setUnavailableSlots([]);
+    setAvailabilityLoading(false);
     resetTurnstile();
   };
 
@@ -309,21 +380,36 @@ export default function BookingFlow() {
           {label}
         </p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-          {slots.map((slot) => (
-            <button
-              key={slot}
-              type="button"
-              onClick={() => updateDraft({ time: slot })}
-              className={[
-                "rounded-lg border px-1.5 py-2.5 text-xs font-medium transition-all duration-300 sm:px-2 sm:text-sm",
-                draft.time === slot
-                  ? "border-gold bg-gold text-[#0a0a0a] shadow-[0_0_16px_rgba(212,175,55,0.35)]"
-                  : "border-gold/15 bg-black/30 text-white/75 hover:border-gold/35 hover:text-white",
-              ].join(" ")}
-            >
-              {formatBookingTime(slot)}
-            </button>
-          ))}
+          {slots.map((slot) => {
+            const isUnavailable = unavailableSlots.includes(slot);
+            const isSelected = draft.time === slot;
+
+            return (
+              <button
+                key={slot}
+                type="button"
+                disabled={isUnavailable || availabilityLoading}
+                onClick={() => {
+                  if (!isUnavailable) {
+                    updateDraft({ time: slot });
+                  }
+                }}
+                aria-disabled={isUnavailable}
+                title={isUnavailable ? form.datetime.unavailable : undefined}
+                className={[
+                  "rounded-lg border px-1.5 py-2.5 text-xs font-medium transition-all duration-300 sm:px-2 sm:text-sm",
+                  isUnavailable
+                    ? "cursor-not-allowed border-white/10 bg-white/[0.02] text-white/25 line-through decoration-white/20"
+                    : isSelected
+                      ? "border-gold bg-gold text-[#0a0a0a] shadow-[0_0_16px_rgba(212,175,55,0.35)]"
+                      : "border-gold/15 bg-black/30 text-white/75 hover:border-gold/35 hover:text-white",
+                  availabilityLoading && !isUnavailable ? "opacity-70" : "",
+                ].join(" ")}
+              >
+                {formatBookingTime(slot)}
+              </button>
+            );
+          })}
         </div>
       </div>
     );
@@ -392,7 +478,10 @@ export default function BookingFlow() {
 
   if (isComplete && completedSummary) {
     return (
-      <div className="rounded-2xl border border-gold/20 bg-[#111111] p-6 text-center backdrop-blur-sm sm:bg-white/[0.03] sm:p-10">
+      <div
+        ref={flowTopRef}
+        className="scroll-mt-24 rounded-2xl border border-gold/20 bg-[#111111] p-6 text-center backdrop-blur-sm sm:bg-white/[0.03] sm:p-10"
+      >
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-gold/30 bg-gold/10 text-2xl text-gold">
           ✓
         </div>
@@ -424,7 +513,10 @@ export default function BookingFlow() {
   }
 
   return (
-    <div className="min-w-0 rounded-2xl border border-gold/20 bg-[#111111] p-4 backdrop-blur-sm sm:bg-white/[0.03] sm:p-6 md:p-8">
+    <div
+      ref={flowTopRef}
+      className="scroll-mt-24 min-w-0 rounded-2xl border border-gold/20 bg-[#111111] p-4 backdrop-blur-sm sm:bg-white/[0.03] sm:p-6 md:p-8"
+    >
       <StepIndicator currentStep={currentStep} />
 
       <div className="mt-8">
@@ -502,9 +594,14 @@ export default function BookingFlow() {
             </div>
 
             <div className="mt-8 space-y-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-light">
-                {form.datetime.timeLabel}
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-light">
+                  {form.datetime.timeLabel}
+                </p>
+                {availabilityLoading && (
+                  <p className="text-xs text-white/40">{form.datetime.loadingTimes}</p>
+                )}
+              </div>
 
               {!draft.date ? (
                 <p className="rounded-xl border border-gold/10 bg-black/20 px-4 py-6 text-center text-sm text-white/45">

@@ -12,6 +12,7 @@ import {
   toDatabaseTime,
   type ExistingBookingSlot,
 } from "@/lib/booking/overlap";
+import { getExistingBookingsForDate } from "@/lib/booking/getExistingBookings";
 import { getSupabaseClient } from "@/lib/supabase";
 import { verifyTurnstileToken } from "@/lib/turnstile/verifyTurnstile";
 import {
@@ -93,13 +94,11 @@ export async function POST(request: Request) {
 
     const booking = sanitizeBookingRequest(body, service);
 
-    const { data: existingBookings, error: fetchError } = await supabase
-      .from("bookings")
-      .select("appointment_time, duration_minutes")
-      .eq("appointment_date", booking.appointment_date)
-      .in("status", ["pending", "confirmed"]);
+    let existingBookings: ExistingBookingSlot[];
 
-    if (fetchError) {
+    try {
+      existingBookings = await getExistingBookingsForDate(booking.appointment_date);
+    } catch (fetchError) {
       console.error("Supabase fetch error:", fetchError);
       return NextResponse.json(
         { error: "Unable to check availability right now. Please try again shortly." },
@@ -111,7 +110,7 @@ export async function POST(request: Request) {
     const overlaps = hasBookingOverlap(
       candidateStart,
       booking.duration_minutes,
-      (existingBookings ?? []) as ExistingBookingSlot[],
+      existingBookings,
     );
 
     if (overlaps) {

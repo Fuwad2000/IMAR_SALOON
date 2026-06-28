@@ -21,7 +21,7 @@ const initialValues: FormValues = {
 };
 
 const inputClassName =
-  "w-full rounded-xl border border-gold/20 bg-black/40 px-4 py-3 text-sm text-white placeholder:text-white/30 transition-all duration-300 focus:border-gold/60 focus:outline-none focus:ring-2 focus:ring-gold/20";
+  "w-full rounded-xl border border-gold/20 bg-black/40 px-4 py-3 text-base text-white placeholder:text-white/30 transition-all duration-300 focus:border-gold/60 focus:outline-none focus:ring-2 focus:ring-gold/20 sm:text-sm";
 
 const inputErrorClassName =
   "border-red-400/60 focus:border-red-400/60 focus:ring-red-400/20";
