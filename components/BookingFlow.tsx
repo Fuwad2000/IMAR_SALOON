@@ -56,7 +56,7 @@ function StepIndicator({ currentStep }: { currentStep: BookingStepId }) {
   const currentIndex = stepOrder.indexOf(currentStep);
 
   return (
-    <ol className="grid grid-cols-4 gap-2 sm:gap-3">
+    <ol className="grid grid-cols-4 gap-1.5 sm:gap-3">
       {steps.map((step, index) => {
         const isComplete = index < currentIndex;
         const isCurrent = step.id === currentStep;
@@ -65,7 +65,7 @@ function StepIndicator({ currentStep }: { currentStep: BookingStepId }) {
           <li key={step.id} className="min-w-0">
             <div
               className={[
-                "rounded-xl border px-2 py-3 text-center transition-all duration-300 sm:px-3",
+                "rounded-lg border px-1.5 py-2.5 text-center transition-all duration-300 sm:rounded-xl sm:px-3 sm:py-3",
                 isCurrent
                   ? "border-gold/50 bg-gold/10"
                   : isComplete
@@ -75,7 +75,7 @@ function StepIndicator({ currentStep }: { currentStep: BookingStepId }) {
             >
               <span
                 className={[
-                  "mx-auto flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold",
+                  "mx-auto flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold sm:h-7 sm:w-7 sm:text-xs",
                   isCurrent
                     ? "bg-gold text-[#0a0a0a]"
                     : isComplete
@@ -87,7 +87,7 @@ function StepIndicator({ currentStep }: { currentStep: BookingStepId }) {
               </span>
               <p
                 className={[
-                  "mt-2 truncate text-[10px] font-semibold uppercase tracking-[0.12em] sm:text-xs",
+                  "mt-1.5 text-[9px] font-semibold uppercase leading-tight tracking-[0.06em] sm:mt-2 sm:text-xs sm:tracking-[0.12em]",
                   isCurrent ? "text-gold-light" : "text-white/45",
                 ].join(" ")}
               >
@@ -308,14 +308,14 @@ export default function BookingFlow() {
         <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-gold-light">
           {label}
         </p>
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
           {slots.map((slot) => (
             <button
               key={slot}
               type="button"
               onClick={() => updateDraft({ time: slot })}
               className={[
-                "rounded-lg border px-2 py-2.5 text-sm font-medium transition-all duration-300",
+                "rounded-lg border px-1.5 py-2.5 text-xs font-medium transition-all duration-300 sm:px-2 sm:text-sm",
                 draft.time === slot
                   ? "border-gold bg-gold text-[#0a0a0a] shadow-[0_0_16px_rgba(212,175,55,0.35)]"
                   : "border-gold/15 bg-black/30 text-white/75 hover:border-gold/35 hover:text-white",
@@ -392,7 +392,7 @@ export default function BookingFlow() {
 
   if (isComplete && completedSummary) {
     return (
-      <div className="rounded-2xl border border-gold/20 bg-white/[0.03] p-8 text-center backdrop-blur-sm sm:p-10">
+      <div className="rounded-2xl border border-gold/20 bg-[#111111] p-6 text-center backdrop-blur-sm sm:bg-white/[0.03] sm:p-10">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-gold/30 bg-gold/10 text-2xl text-gold">
           ✓
         </div>
@@ -415,7 +415,7 @@ export default function BookingFlow() {
         <button
           type="button"
           onClick={resetBooking}
-          className="mt-8 inline-flex items-center justify-center rounded-full bg-gold px-8 py-3.5 text-sm font-bold uppercase tracking-[0.12em] text-[#0a0a0a] transition-all duration-300 hover:bg-gold-light hover:shadow-[0_0_24px_rgba(212,175,55,0.45)]"
+          className="mt-8 inline-flex w-full items-center justify-center rounded-full bg-gold px-8 py-3.5 text-sm font-bold uppercase tracking-[0.12em] text-[#0a0a0a] transition-all duration-300 hover:bg-gold-light hover:shadow-[0_0_24px_rgba(212,175,55,0.45)] sm:w-auto"
         >
           {form.success.newBooking}
         </button>
@@ -424,13 +424,13 @@ export default function BookingFlow() {
   }
 
   return (
-    <div className="rounded-2xl border border-gold/20 bg-white/[0.03] p-6 backdrop-blur-sm sm:p-8">
+    <div className="min-w-0 rounded-2xl border border-gold/20 bg-[#111111] p-4 backdrop-blur-sm sm:bg-white/[0.03] sm:p-6 md:p-8">
       <StepIndicator currentStep={currentStep} />
 
       <div className="mt-8">
         {currentStep === "service" && (
           <div>
-            <h2 className="text-2xl font-bold tracking-tight text-white">
+            <h2 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
               {form.service.title}
             </h2>
             <p className="mt-2 text-sm text-white/55">{form.service.subtitle}</p>
@@ -443,12 +443,12 @@ export default function BookingFlow() {
                   onClick={() => updateDraft({ serviceId: service.id })}
                   className={selectionClassName(draft.serviceId === service.id)}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                    <div className="min-w-0">
                       <p className="font-semibold text-white">{service.name}</p>
                       <p className="mt-1 text-sm text-white/50">{service.description}</p>
                     </div>
-                    <span className="shrink-0 rounded-full border border-gold/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-gold-light">
+                    <span className="w-fit shrink-0 rounded-full border border-gold/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-gold-light">
                       {service.durationMinutes} min
                     </span>
                   </div>
@@ -460,7 +460,7 @@ export default function BookingFlow() {
 
         {currentStep === "datetime" && (
           <div>
-            <h2 className="text-2xl font-bold tracking-tight text-white">
+            <h2 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
               {form.datetime.title}
             </h2>
             <p className="mt-2 text-sm text-white/55">{form.datetime.subtitle}</p>
@@ -469,14 +469,14 @@ export default function BookingFlow() {
               <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-gold-light">
                 {form.datetime.dateLabel}
               </p>
-              <div className="flex gap-2 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {availableDates.map((date) => (
                   <button
                     key={date.key}
                     type="button"
                     onClick={() => updateDraft({ date: date.key, time: null })}
                     className={[
-                      "min-w-[4.75rem] shrink-0 rounded-xl border px-3 py-3 text-center transition-all duration-300",
+                      "min-w-[4.25rem] shrink-0 rounded-xl border px-2.5 py-2.5 text-center transition-all duration-300 sm:min-w-[4.75rem] sm:px-3 sm:py-3",
                       draft.date === date.key
                         ? "border-gold bg-gold text-[#0a0a0a]"
                         : "border-gold/15 bg-black/30 text-white/75 hover:border-gold/35",
@@ -523,7 +523,7 @@ export default function BookingFlow() {
 
         {currentStep === "details" && (
           <div>
-            <h2 className="text-2xl font-bold tracking-tight text-white">
+            <h2 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
               {form.details.title}
             </h2>
             <p className="mt-2 text-sm text-white/55">{form.details.subtitle}</p>
@@ -561,8 +561,8 @@ export default function BookingFlow() {
         )}
 
         {currentStep === "review" && selectedService && draft.date && draft.time && (
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight text-white">
+          <div className="relative">
+            <h2 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
               {form.review.title}
             </h2>
             <p className="mt-2 text-sm text-white/55">{form.review.subtitle}</p>
@@ -587,7 +587,9 @@ export default function BookingFlow() {
                   <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-light">
                     {label}
                   </dt>
-                  <dd className="text-sm text-white/80 sm:text-right">{value}</dd>
+                  <dd className="break-words text-sm text-white/80 sm:max-w-[60%] sm:text-right">
+                    {value}
+                  </dd>
                 </div>
               ))}
             </dl>
@@ -617,8 +619,9 @@ export default function BookingFlow() {
                 Loading security verification...
               </div>
             ) : turnstileSiteKey ? (
-              <div className="mt-6 overflow-hidden rounded-xl border border-gold/15 bg-black/30 p-3">
-                <Turnstile
+              <div className="mt-6 flex justify-center overflow-hidden rounded-xl border border-gold/15 bg-black/30 p-3">
+                <div className="max-w-full origin-top scale-[0.92] sm:scale-100">
+                  <Turnstile
                   ref={turnstileRef}
                   siteKey={turnstileSiteKey}
                   onSuccess={setTurnstileToken}
@@ -629,6 +632,7 @@ export default function BookingFlow() {
                     appearance: "always",
                   }}
                 />
+                </div>
               </div>
             ) : (
               <p className="mt-6 text-sm text-red-300" role="alert">
@@ -648,12 +652,12 @@ export default function BookingFlow() {
         </div>
       )}
 
-      <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+      <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-between">
         <button
           type="button"
           onClick={goBack}
           disabled={currentStep === "service" || isSubmitting}
-          className="inline-flex items-center justify-center rounded-full border border-gold/25 px-8 py-3.5 text-sm font-bold uppercase tracking-[0.12em] text-gold transition-all duration-300 hover:border-gold/50 hover:bg-gold/5 disabled:cursor-not-allowed disabled:opacity-40"
+          className="order-2 inline-flex w-full items-center justify-center rounded-full border border-gold/25 px-8 py-3.5 text-sm font-bold uppercase tracking-[0.12em] text-gold transition-all duration-300 hover:border-gold/50 hover:bg-gold/5 disabled:cursor-not-allowed disabled:opacity-40 sm:order-1 sm:w-auto"
         >
           {form.actions.back}
         </button>
@@ -663,7 +667,7 @@ export default function BookingFlow() {
             type="button"
             onClick={handleSubmit}
             disabled={isSubmitting || !turnstileToken || !turnstileSiteKey}
-            className="inline-flex items-center justify-center rounded-full bg-gold px-8 py-3.5 text-sm font-bold uppercase tracking-[0.12em] text-[#0a0a0a] transition-all duration-300 hover:bg-gold-light hover:shadow-[0_0_24px_rgba(212,175,55,0.45)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="order-1 inline-flex w-full items-center justify-center rounded-full bg-gold px-8 py-3.5 text-sm font-bold uppercase tracking-[0.12em] text-[#0a0a0a] transition-all duration-300 hover:bg-gold-light hover:shadow-[0_0_24px_rgba(212,175,55,0.45)] disabled:cursor-not-allowed disabled:opacity-60 sm:order-2 sm:w-auto"
           >
             {isSubmitting ? form.actions.submitting : form.actions.confirm}
           </button>
@@ -672,7 +676,7 @@ export default function BookingFlow() {
             type="button"
             onClick={handleContinue}
             disabled={!canContinue}
-            className="inline-flex items-center justify-center rounded-full bg-gold px-8 py-3.5 text-sm font-bold uppercase tracking-[0.12em] text-[#0a0a0a] transition-all duration-300 hover:bg-gold-light hover:shadow-[0_0_24px_rgba(212,175,55,0.45)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="order-1 inline-flex w-full items-center justify-center rounded-full bg-gold px-8 py-3.5 text-sm font-bold uppercase tracking-[0.12em] text-[#0a0a0a] transition-all duration-300 hover:bg-gold-light hover:shadow-[0_0_24px_rgba(212,175,55,0.45)] disabled:cursor-not-allowed disabled:opacity-60 sm:order-2 sm:w-auto"
           >
             {form.actions.continue}
           </button>

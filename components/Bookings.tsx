@@ -6,7 +6,7 @@ const { header, availability, sidebar } = bookingsContent;
 
 export default function Bookings() {
   return (
-    <div className="flex flex-1 flex-col bg-black text-white">
+    <div className="flex min-h-full flex-1 flex-col overflow-x-hidden bg-black text-white">
       <section className="relative overflow-hidden border-b border-gold/20 px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
         <div
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(212,175,55,0.12),transparent_55%)]"
@@ -43,10 +43,12 @@ export default function Bookings() {
       </section>
 
       <section className="border-t border-gold/15 px-4 pb-16 sm:px-6 sm:pb-20 lg:px-8">
-        <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-14">
-          <BookingFlow />
+        <div className="mx-auto grid w-full min-w-0 max-w-6xl gap-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-14">
+          <div className="min-w-0">
+            <BookingFlow />
+          </div>
 
-          <aside className="rounded-2xl border border-gold/15 bg-white/[0.03] p-6 backdrop-blur-sm">
+          <aside className="min-w-0 rounded-2xl border border-gold/15 bg-white/[0.03] p-6 backdrop-blur-sm">
             <h2 className="text-lg font-bold tracking-tight text-white">
               {sidebar.title}
             </h2>
