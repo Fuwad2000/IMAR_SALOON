@@ -6,9 +6,9 @@ import {
   buildBookingConfirmationSubject,
   buildBookingConfirmationText,
 } from "@/lib/email/buildBookingEmail";
+import { BOOKING_HOURS } from "@/lib/booking/availability";
 import {
-  hasBookingOverlap,
-  timeToMinutes,
+  isSlotUnavailable,
   toDatabaseTime,
   type ExistingBookingSlot,
 } from "@/lib/booking/overlap";
@@ -106,14 +106,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const candidateStart = timeToMinutes(booking.appointment_time);
-    const overlaps = hasBookingOverlap(
-      candidateStart,
-      booking.duration_minutes,
-      existingBookings,
-    );
+    const closingMinute = BOOKING_HOURS.endHour * 60;
 
-    if (overlaps) {
+    if (
+      isSlotUnavailable(
+        booking.appointment_time,
+        booking.duration_minutes,
+        existingBookings,
+        closingMinute,
+      )
+    ) {
       return NextResponse.json(
         {
           error:

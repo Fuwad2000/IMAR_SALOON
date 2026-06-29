@@ -8,7 +8,7 @@ export const bookingsContent = {
   availability: {
     label: "Open every day",
     value: "Monday – Sunday",
-    hours: "9:00 AM – 8:00 PM",
+    hours: "9:00 AM – 10:00 PM",
   },
   steps: [
     { id: "service", label: "Service" },

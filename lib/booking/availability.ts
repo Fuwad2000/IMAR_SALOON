@@ -1,6 +1,6 @@
 export const BOOKING_HOURS = {
   startHour: 9,
-  endHour: 20,
+  endHour: 22,
   slotIntervalMinutes: 30,
   maxAdvanceDays: 21,
 } as const;

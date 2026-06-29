@@ -1,4 +1,4 @@
-import { getTimeSlots } from "@/lib/booking/availability";
+import { BOOKING_HOURS, getTimeSlots } from "@/lib/booking/availability";
 import { getExistingBookingsForDate } from "@/lib/booking/getExistingBookings";
 import { getUnavailableTimeSlots } from "@/lib/booking/overlap";
 import { NextResponse } from "next/server";
@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+const closingMinute = BOOKING_HOURS.endHour * 60;
 
 export async function GET(request: Request) {
   try {
@@ -37,6 +38,7 @@ export async function GET(request: Request) {
       getTimeSlots(),
       durationMinutes,
       existingBookings,
+      closingMinute,
     );
 
     return NextResponse.json({ unavailableSlots });
