@@ -74,7 +74,10 @@ export const bookingsContent = {
       afternoon: "Afternoon",
       evening: "Evening",
       loadingTimes: "Checking availability...",
+      loadingOverlay: "Checking the schedule for open times...",
       unavailable: "Unavailable",
+      loadError:
+        "We couldn't load available times right now. You can still continue, but availability will be verified when you submit.",
     },
     details: {
       title: "Your details",
@@ -107,7 +110,8 @@ export const bookingsContent = {
       back: "Back",
       continue: "Continue",
       confirm: "Request appointment",
-      submitting: "Submitting...",
+      submitting: "Checking availability...",
+      submittingDetail: "Verifying your time slot and saving your request.",
     },
     success: {
       title: "Booking request received",

@@ -52,6 +52,34 @@ const selectionClassName = (selected: boolean) =>
       : "border-gold/15 bg-black/30 text-white/80 hover:border-gold/35 hover:bg-white/[0.04]",
   ].join(" ");
 
+function BookingLoadingOverlay({
+  title,
+  detail,
+}: {
+  title: string;
+  detail?: string;
+}) {
+  return (
+    <div
+      className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-2xl bg-[#0a0a0a]/90 px-6 backdrop-blur-sm"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div
+        className="h-11 w-11 animate-spin rounded-full border-2 border-gold/20 border-t-gold"
+        aria-hidden="true"
+      />
+      <p className="mt-5 text-center text-sm font-semibold text-white">{title}</p>
+      {detail && (
+        <p className="mt-2 max-w-xs text-center text-xs leading-relaxed text-white/55">
+          {detail}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function StepIndicator({ currentStep }: { currentStep: BookingStepId }) {
   const currentIndex = stepOrder.indexOf(currentStep);
 
@@ -126,6 +154,7 @@ export default function BookingFlow() {
   const [isComplete, setIsComplete] = useState(false);
   const [unavailableSlots, setUnavailableSlots] = useState<string[]>([]);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState("");
 
   const availableDates = useMemo(() => getAvailableDates(), []);
   const timeSlots = useMemo(() => getTimeSlots(), []);
@@ -182,6 +211,7 @@ export default function BookingFlow() {
     if (!draft.date || !selectedService) {
       setUnavailableSlots([]);
       setAvailabilityLoading(false);
+      setAvailabilityError("");
       return;
     }
 
@@ -189,6 +219,7 @@ export default function BookingFlow() {
 
     async function loadAvailability() {
       setAvailabilityLoading(true);
+      setAvailabilityError("");
 
       try {
         const params = new URLSearchParams({
@@ -196,9 +227,18 @@ export default function BookingFlow() {
           durationMinutes: String(selectedService!.durationMinutes),
         });
         const response = await fetch(`/api/bookings/availability?${params}`);
-        const data = (await response.json()) as { unavailableSlots?: string[] };
+        const data = (await response.json()) as {
+          unavailableSlots?: string[];
+          error?: string;
+        };
 
         if (cancelled) {
+          return;
+        }
+
+        if (!response.ok) {
+          setUnavailableSlots([]);
+          setAvailabilityError(form.datetime.loadError);
           return;
         }
 
@@ -214,6 +254,7 @@ export default function BookingFlow() {
       } catch {
         if (!cancelled) {
           setUnavailableSlots([]);
+          setAvailabilityError(form.datetime.loadError);
         }
       } finally {
         if (!cancelled) {
@@ -357,6 +398,7 @@ export default function BookingFlow() {
     setCurrentStep("service");
     setUnavailableSlots([]);
     setAvailabilityLoading(false);
+    setAvailabilityError("");
     resetTurnstile();
   };
 
@@ -515,8 +557,15 @@ export default function BookingFlow() {
   return (
     <div
       ref={flowTopRef}
-      className="scroll-mt-24 min-w-0 rounded-2xl border border-gold/20 bg-[#111111] p-4 backdrop-blur-sm sm:bg-white/[0.03] sm:p-6 md:p-8"
+      className="relative scroll-mt-24 min-w-0 rounded-2xl border border-gold/20 bg-[#111111] p-4 backdrop-blur-sm sm:bg-white/[0.03] sm:p-6 md:p-8"
     >
+      {isSubmitting && (
+        <BookingLoadingOverlay
+          title={form.actions.submitting}
+          detail={form.actions.submittingDetail}
+        />
+      )}
+
       <StepIndicator currentStep={currentStep} />
 
       <div className="mt-8">
@@ -608,11 +657,24 @@ export default function BookingFlow() {
                   Select a date first to see available times.
                 </p>
               ) : (
-                <>
+                <div className="relative min-h-[12rem]">
+                  {availabilityLoading && (
+                    <BookingLoadingOverlay title={form.datetime.loadingOverlay} />
+                  )}
+
+                  {availabilityError && !availabilityLoading && (
+                    <div
+                      className="mb-4 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-200/90"
+                      role="alert"
+                    >
+                      {availabilityError}
+                    </div>
+                  )}
+
                   {renderTimeGroup(form.datetime.morning, groupedSlots.morning)}
                   {renderTimeGroup(form.datetime.afternoon, groupedSlots.afternoon)}
                   {renderTimeGroup(form.datetime.evening, groupedSlots.evening)}
-                </>
+                </div>
               )}
             </div>
           </div>
